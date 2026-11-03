@@ -4,19 +4,33 @@ on:
   workflow_call:
 
 permissions:
-  contents: read
+  contents: write
   pull-requests: write
 
 jobs:
   evaluate:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout Código do Aluno
+      - name: 1. Checkout Código do Aluno
         uses: actions/checkout@v4
         with:
           path: student_code
 
-      - name: Checkout do Gabarito (1 Repo por Exercício)
+      - name: 2. Determinar o nome do Assignment
+        run: |
+          if [ -f "student_code/.classroom.yaml" ]; then
+            # Extrai diretamente do metadado oficial do Classroom 50
+            ASSIGNMENT_NAME=$(python3 -c "import yaml; print(yaml.safe_load(open('student_code/.classroom.yaml'))['assignment'])")
+          else
+            # Fallback de segurança: extrai via regex do nome do repositório
+            REPO_NAME="${{ github.event.repository.name }}"
+            ASSIGNMENT_NAME=$(echo "$REPO_NAME" | sed -E 's/^[^-]+-[^-]+-(.*)-[^-]+$/\1/')
+          fi
+
+          echo "ASSIGNMENT_NAME=$ASSIGNMENT_NAME" >> $GITHUB_ENV
+          echo "Atividade identificada: $ASSIGNMENT_NAME"
+
+      - name: 3. Checkout do Gabarito (1 Repo por Exercício)
         uses: actions/checkout@v4
         with:
           # Busca dinamicamente o repositório com a slug da atividade na org de gabaritos
@@ -24,10 +38,10 @@ jobs:
           token: ${{ secrets.GABARITOS_READ_TOKEN }}
           path: classroom_gabaritos
 
-      - name: Criar Diretório de Saída
+      - name: 4. Criar Diretório de Saída
         run: mkdir -p output
 
-      - name: Executar Motor de Avaliação em Docker
+      - name: 5. Executar Motor de Avaliação em Docker
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           DOCKER_IMAGE: ${{ vars.AUTOGRADER_DOCKER_IMAGE || 'markinsilva/classroom50-ai-autograder:v2.0' }}
@@ -39,16 +53,68 @@ jobs:
             -v "$(pwd)/output:/app/output" \
             "${DOCKER_IMAGE}"
 
-      - name: Publicar Resultado e Comentar no PR
+      - name: 6. Publicar Resultado e Comentar no PR
+        if: always()
         env:
-          GH_TOKEN: ${{ github.token }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          echo "Fazendo upload do result.json..."
-          gh release delete "${{ github.ref_name }}" -y -R "${{ github.repository }}" || true
-          gh release create "${{ github.ref_name }}" ./result.json \
-            -R "${{ github.repository }}" \
-            --title "Avaliação IA (${{ github.ref_name }})" \
-            --notes-file ./feedback.md
+          if [ -f "output/results.json" ]; then
+            cat output/results.json >> $GITHUB_STEP_SUMMARY
 
-          echo "Adicionando comentário no Feedback PR..."
-          gh pr comment main -R "${{ github.repository }}" --body-file ./feedback.md || echo "Nenhum PR aberto encontrado para comentar."
+            # 1. Converte o JSON em um arquivo Markdown formatado
+            python3 -c '
+import json, os
+
+json_path = "output/results.json"
+md_path = "output/feedback.md"
+
+if os.path.exists(json_path):
+    with open(json_path, "r", encoding="utf-8") as f:
+        data = json.load(f)
+    
+    avaliacao = data.get("avaliacao", "N/A")
+    justificativa = data.get("justificativa", "Sem justificativa.")
+    dica = data.get("dica_correcao", "Sem dica.")
+    sugestao = data.get("sugestao_correcao", "")
+
+    # Define emoji com base na avaliação
+    emoji = "🟢" if avaliacao == "Certo" else ("🟡" if avaliacao == "Parcialmente Certo" else "🔴")
+
+    md = f"""## {emoji} Feedback da Avaliação Automática
+
+**Resultado:** `{avaliacao}`
+
+### 📝 Justificativa
+{justificativa}
+
+### 💡 Dica de Correção
+{dica}
+"""
+    if sugestao:
+        md += f"\n### 🛠️ Sugestão de Código\n```java\n{sugestao}\n```\n"
+
+    with open(md_path, "w", encoding="utf-8") as f:
+        f.write(md)
+'
+
+            # 2. Upload para a Release
+            echo "Fazendo upload do output/results.json para Release..."
+            gh release delete "${{ github.ref_name }}" -y -R "${{ github.repository }}" || true
+            gh release create "${{ github.ref_name }}" output/results.json \
+              -R "${{ github.repository }}" \
+              --title "Avaliação IA (${{ github.ref_name }})" \
+              --notes "Relatório de avaliação gerado automaticamente."
+
+            # 3. Comenta o Markdown formatado no PR
+            echo "Adicionando comentário no PR do estudante..."
+            cd student_code
+            PR_NUMBER=$(gh pr list --state open --json number --jq '.[0].number')
+            if [ -n "$PR_NUMBER" ]; then
+              gh pr comment "$PR_NUMBER" -R "${{ github.repository }}" --body-file "../output/feedback.md"
+            else
+              echo "Nenhum PR aberto encontrado para o repositório."
+            fi
+          else
+            echo "::error::O relatório de avaliação em output/results.json não foi gerado pelo contêiner." >> $GITHUB_STEP_SUMMARY
+            exit 1
+          fi
