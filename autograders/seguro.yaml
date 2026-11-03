@@ -6,8 +6,12 @@ on:
       - 'submit/*'
 
 jobs:
-  run-evaluator:
+  grade:
     # IMPORTANTE: Substitua 'SUA_ORGANIZACAO' pelo nome exato da sua org no GitHub.
     # O GitHub Actions exige que a propriedade 'uses:' seja uma string literal estática.
     uses: SUA_ORGANIZACAO/classroom50/.github/workflows/secure-evaluator-monolitico.yaml@main
     secrets: inherit
+    permissions:
+      contents: write
+      statuses: write
+      pull-requests: write
