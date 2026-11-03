@@ -2,8 +2,10 @@ name: Central Secure Evaluator (Por Repositório)
 
 on:
   workflow_call:
-  repository_dispatch:
-    types: [evaluate-submission]
+
+permissions:
+  contents: read
+  pull-requests: write
 
 jobs:
   evaluate:

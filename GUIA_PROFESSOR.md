@@ -16,7 +16,6 @@ gh extension install foundation50/gh-student
 # Verificação da instalação
 gh teacher --help
 gh student --help
-
 ```
 
 ### Autenticação na CLI
@@ -25,16 +24,6 @@ Faça o login com as permissões OAuth necessárias para o Classroom 50:
 
 ```bash
 gh teacher login
-
-```
-
-### Inicialização da Organização (Executado 1x por Org)
-
-Caso a organização ainda não tenha sido configurada pelo administrador:
-
-```bash
-gh teacher init <NOME_DA_ORGANIZACAO>
-
 ```
 
 ---
