@@ -1,0 +1,13 @@
+name: Classroom50 Autograder Trigger
+
+on:
+  push:
+    tags:
+      - 'submit/*'
+
+jobs:
+  run-evaluator:
+    # IMPORTANTE: Substitua 'SUA_ORGANIZACAO' pelo nome exato da sua org no GitHub.
+    # O GitHub Actions exige que a propriedade 'uses:' seja uma string literal estática.
+    uses: SUA_ORGANIZACAO/classroom50/.github/workflows/secure-evaluator-monolitico.yaml@main
+    secrets: inherit
