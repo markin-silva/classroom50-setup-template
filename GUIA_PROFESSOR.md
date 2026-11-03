@@ -89,8 +89,8 @@ No terminal, execute o comando de registro associando a atividade ao repositóri
 gh teacher assignment add <NOME_DA_ORGANIZACAO> <NOME_DA_TURMA> <SLUG_DO_EXERCICIO> \
   --name "Título Exibido da Atividade" \
   --template <NOME_DA_ORGANIZACAO>/<REPO_TEMPLATE> \
-  --autograder seguro
-
+  --autograder seguro \
+  --submission-mode tag
 ```
 
 #### Exemplo Prático:
@@ -100,7 +100,7 @@ gh teacher assignment add ufla-classroom50 testes-classroom50 exercicio-livro \
   --name "Exercício 01 - Herança e Polimorfismo" \
   --template ufla-classroom50/template-exercicio-livro \
   --autograder seguro
-
+  --submission-mode tag
 ```
 
 > **O que ocorre nos bastidores:**

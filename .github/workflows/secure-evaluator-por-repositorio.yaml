@@ -37,11 +37,16 @@ jobs:
             -v "$(pwd)/output:/app/output" \
             "${DOCKER_IMAGE}"
 
-      - name: Publicar Resultado no GitHub Actions Summary
-        if: always()
+      - name: Publicar Resultado e Comentar no PR
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
-          if [ -f "output/results.json" ]; then
-            cat output/results.json >> $GITHUB_STEP_SUMMARY
-          else
-            echo "::error::O relatório de avaliação em output/results.json não foi gerado." >> $GITHUB_STEP_SUMMARY
-          fi
+          echo "Fazendo upload do result.json..."
+          gh release delete "${{ github.ref_name }}" -y -R "${{ github.repository }}" || true
+          gh release create "${{ github.ref_name }}" ./result.json \
+            -R "${{ github.repository }}" \
+            --title "Avaliação IA (${{ github.ref_name }})" \
+            --notes-file ./feedback.md
+
+          echo "Adicionando comentário no Feedback PR..."
+          gh pr comment main -R "${{ github.repository }}" --body-file ./feedback.md || echo "Nenhum PR aberto encontrado para comentar."
