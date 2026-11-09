@@ -93,8 +93,14 @@ gh teacher assignment add ufla-classroom50 testes-classroom50 exercicio-livro \
 ```
 
 > **O que ocorre nos bastidores:**
-> A flag `--autograder seguro` instrui o Classroom 50 a buscar o arquivo `autograders/seguro.yaml` cadastrado no repositório central `classroom50` da organização e injetá-lo automaticamente no `.github/workflows/autograde.yaml` do repositório do estudante no momento em que a tarefa for aceita.
-
+> * **`--autograder seguro`**: Instrução dada ao Classroom 50 para buscar o workflow de avaliação `autograders/seguro.yaml` cadastrado no repositório central `classroom50` da organização e injetá-lo no repositório do estudante no momento do aceite da tarefa.
+> 
+> 
+> * **`--submission-mode tag`**: Configura a atividade para disparar a avaliação automatizada **apenas** quando uma tag do padrão `submit/*` for enviada. Isso garante que `git push` rotineiros do aluno não gastem minutos de GitHub Actions e exige que o aluno execute explicitamente o comando `gh student submit` para submeter e avaliar a versão final. *(Caso essa flag seja omitida, o modo padrão será `every-push`, que executa a avaliação a cada commit enviado ao repositório)*.
+> 
+> 
+> 
+> 
 ---
 
 ## 👩‍🎓 Fluxo de Execução do Aluno

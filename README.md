@@ -1,8 +1,8 @@
 # 🛠️ Classroom50 Setup Template
 
-Este repositório contém a infraestrutura base de workflows e configurações necessária para habilitar a avaliação automática com IA (Gemini API + LangGraph) no ecossistema **Classroom50**.
+Este repositório contém a infraestrutura base de workflows e configurações necessária para habilitar a avaliação automatizada com IA (Google Gemini API + LangGraph) no ecossistema **Classroom 50**.
 
-Ele serve como molde para que professores provisionem a correção automatizada em novas organizações no GitHub.
+Ele serve como molde para que professores e administradores de turma provisionem a correção automatizada em novas organizações do GitHub.
 
 ---
 
@@ -16,148 +16,188 @@ classroom50-setup-template/
 │       └── secure-evaluator-por-repositorio.yaml  # Fluxo para 1 repo por gabarito (Modelo Futuro)
 ├── autograders/
 │   └── seguro.yaml                              # Gatilho leve injetado nos repositórios dos alunos
-└── README.md                                    # Guia de implantação e customização
-└── GUIA_PROFESSOR.md                            # Guia para configuração e submissão dos exercícios
-
+├── GUIA_PROFESSOR.md                            # Guia de cadastramento e gestão de exercícios via CLI
+└── README.md                                    # Guia de implantação e infraestrutura do template
 ```
 
 ---
 
 ## 🚀 Como Configurar uma Nova Organização
 
-### 1. Ajustar o Arquivo Gatilho (`autograders/seguro.yaml`)
+### 1. Inicializar a Organização via CLI (`gh teacher`)
 
-Devido às restrições do GitHub Actions, a propriedade `uses:` exige o caminho exato do repositório da organização.
-Altere a linha do arquivo `autograders/seguro.yaml` para conter o nome da sua organização:
+Antes de copiar os arquivos de infraestrutura, certifique-se de que a organização foi inicializada pelo administrador utilizando a extensão oficial do Classroom 50:
 
-```yaml
-uses: SUA_ORGANIZACAO/classroom50/.github/workflows/secure-evaluator-monolitico.yaml@main
+```bash
+# Instalar a extensão gh teacher (caso ainda não possua)
+gh extension install foundation50/gh-teacher
 
+# Autenticar com escopo OAuth administrativo
+gh teacher login
+
+# Inicializar a organização
+gh teacher init <NOME_DA_ORGANIZACAO>
 ```
 
-### 2. Configurar os Segredos da Organização (Organization Secrets)
+---
 
-Acesse **Organization Settings > Secrets and variables > Actions** na sua organização e adicione as seguintes credenciais:
+### 2. Configurar o Arquivo Gatilho (`autograders/seguro.yaml`)
 
-* **`GEMINI_API_KEY`**: Chave da API do Google Gemini (gerada no Google AI Studio) utilizada para a geração de feedback.
-* **`GABARITOS_READ_TOKEN`**: Personal Access Token (PAT) com permissão de leitura nos repositórios/pastas de gabarito privado da organização.
+Devido às restrições nativas do GitHub Actions, a propriedade `uses:` exige o caminho estático e literal da organização. 
 
-### 3. Escolher o Modelo de Organização dos Gabaritos
+Altere a linha do arquivo `autograders/seguro.yaml` para conter o nome exato da sua organização no GitHub:
+
+```yaml
+jobs:
+  run-evaluator:
+    # Substitua SUA_ORGANIZACAO pelo nome real da org (ex: ufla-classroom50)
+    uses: SUA_ORGANIZACAO/classroom50/.github/workflows/secure-evaluator-monolitico.yaml@main
+    secrets: inherit
+```
+
+---
+
+### 3. Configurar os Segredos da Organização (Organization Secrets)
+
+Acesse **Organization Settings > Secrets and variables > Actions** na sua organização no GitHub e cadastre as credenciais abaixo:
+
+#### A. `GEMINI_API_KEY`
+Chave de API do Google Gemini utilizada para autenticação e geração dos feedbacks pedagógicos automatizados via IA.
+
+**Como obter a chave:**
+1. Acesse o [Google AI Studio](https://aistudio.google.com/) e faça login com sua conta Google.
+2. Clique no botão **Get API key** no painel inicial.
+3. Clique em **Create API key** (selecione um projeto existente no Google Cloud ou crie um novo).
+4. Copie o código alfanumérico gerado.
+
+#### B. `GABARITOS_READ_TOKEN`
+Personal Access Token (PAT) do GitHub com permissão de leitura nos repositórios privados de gabarito da organização.
+
+**Como gerar o token no GitHub (Fine-grained PAT - Recomendado):**
+1. No GitHub, clique na foto de perfil (canto superior direito) e acesse **Settings**.
+2. No menu lateral esquerdo, role até o final e clique em **Developer settings**.
+3. Navegue até **Personal access tokens > Fine-grained tokens** e clique em **Generate new token**.
+4. Preencha os campos da seguinte forma:
+   * **Token name:** `Classroom50-Gabaritos-ReadOnly`
+   * **Expiration:** Selecione a validade desejada (ex: *90 days* ou duração do semestre).
+   * **Resource owner:** Selecione a Organização da disciplina (ex: `ufla-classroom50`).
+   * **Repository access:** 
+     * Escolha **Only select repositories** e marque o repositório `gabaritos-privados` (caso use um único repositório para a turma), ou:
+     * Escolha **All repositories** (caso a organização seja dedicada exclusivamente a abrigar gabaritos).
+   * **Repository permissions:** Expanda a permissão **Contents** e marque **Access: Read-only**.
+5. Clique em **Generate token** no rodapé e copie o token gerado (iniciado por `github_pat_...`).
+
+#### C. Cadastro dos Segredos na Organização (GitHub):
+1. Entre na página da Organização no GitHub e acesse **Settings**.
+2. No menu lateral esquerdo, navegue até **Secrets and variables > Actions**.
+3. Clique em **New organization secret** e cadastre cada item:
+   * **Name:** `GEMINI_API_KEY` | **Secret:** *(Cole a chave do AI Studio)* | **Repository access:** *All repositories*.
+   * **Name:** `GABARITOS_READ_TOKEN` | **Secret:** *(Cole o token github_pat_...)* | **Repository access:** *All repositories*.
+
+---
+
+### 4. Escolher o Modelo de Organização dos Gabaritos
 
 Copie o arquivo de workflow adequado para o diretório `.github/workflows/` do seu repositório central `classroom50`:
 
-* **Modelo 1: Repositório Monolítico (`gabaritos-privados`)**
-* Use o arquivo `secure-evaluator-monolitico.yaml`.
-* Os gabaritos ficam em um único repositório privado chamado `gabaritos-privados`, organizados em pastas nomeadas por `slug` da atividade (ex: `gabaritos-privados/exercicio-livro/`).
-* O checkout utiliza `${{ github.repository_owner }}/gabaritos-privados` dinamicamente.
-
+* **Modelo 1: Repositório Monolítico (`gabaritos-privados`) — Padrão**
+  * Use o arquivo `secure-evaluator-monolitico.yaml`.
+  * Os gabaritos de todos os exercícios ficam em um único repositório privado chamado `gabaritos-privados`, organizados em pastas com o nome da `slug` da atividade (ex: `gabaritos-privados/exercicio-livro/`).
+  * O checkout busca o repositório `${{ github.repository_owner }}/gabaritos-privados` dinamicamente.
 
 * **Modelo 2: Organização Dedicada (1 Repositório por Exercício)**
-* Use o arquivo `secure-evaluator-por-repositorio.yaml`.
-* Cada atividade é um repositório próprio em uma organização de gabaritos (ex: `org-gabaritos/exercicio-livro`).
-* Defina a variável de organização `GABARITOS_ORG` nas configurações da organização se a org de gabaritos for diferente da org do Classroom50.
-
-
+  * Use o arquivo `secure-evaluator-por-repositorio.yaml`.
+  * Cada atividade é um repositório próprio em uma organização de gabaritos exclusiva (ex: `org-gabaritos/exercicio-livro`).
+  * Permite isolar o acesso por exercício utilizando a variável de organização `GABARITOS_ORG`.
 
 ---
 
-## 📖 Leitura de Enunciados e Gabaritos: Atual vs. Futuro
+## 📖 Leitura de Enunciados e Gabaritos: Estrutura de Arquivos
 
 O motor de avaliação combina o código enviado pelo aluno com a solução oficial e o arquivo `enunciado.md` do professor.
 
-### Modelo Atual (Repositório Monolítico `gabaritos-privados`)
+### Estrutura do Repositório de Gabaritos (Modelo Monolítico)
 
-* **Estrutura**: Existe um único repositório privado na organização chamado `gabaritos-privados`.
-* **Organização**: Cada exercício fica em uma subpasta nomeada com a `slug` exata da atividade (ex: `gabaritos-privados/exercicio-livro/`).
-* **Arquivos da Pasta**:
-* `enunciado.md`: Descrição das regras da atividade lida dinamicamente como instrução.
-* `*.java`: Um ou múltiplos ($N$) arquivos `.java` com o código de referência oficial.
-
-
-
-### Modelo Futuro (Organização Exclusiva de Gabaritos — 1 Repo por Exercício)
-
-* **Estrutura**: Uma organização externa dedicada (ex: `org-gabaritos-professor`), onde **cada exercício é um repositório isolado** com o nome da `slug` (ex: `org-gabaritos-professor/exercicio-livro`).
-* **Arquivos**: A raiz do repositório individual conterá diretamente o `enunciado.md` e os arquivos `.java`.
+Na pasta correspondente à `slug` do exercício (ex: `gabaritos-privados/exercicio-livro/`), os seguintes arquivos devem existir:
+* `enunciado.md`: Regras e instruções da atividade passadas ao prompt da IA.
+* `*.java`: Um ou mais ($N$) arquivos `.java` contendo a solução de referência oficial do professor.
 
 ---
 
-## 🐳 Customização da Imagem Docker do Autograder
+## 🐳 Customização e Contrato da Imagem Docker do Autograder
 
-A imagem padrão utilizada pelo workflow é `markinsilva/classroom50-ai-autograder:v2.0`.
+A imagem padrão utilizada pelos workflows do Classroom 50 é `markinsilva/classroom50-ai-autograder:v2.0`.
 
 ### Alterando a Imagem via GitHub Actions
 
-Para substituir a imagem sem alterar o código do workflow, adicione uma **Organization Variable** ou **Repository Variable**:
-
-* **Nome**: `AUTOGRADER_DOCKER_IMAGE`
-* **Valor**: `seu-usuario-docker/sua-imagem:v1.0`
+Para substituir a imagem por uma versão customizada sem alterar o código dos workflows, adicione uma **Organization Variable** ou **Repository Variable** no GitHub:
+* **Nome:** `AUTOGRADER_DOCKER_IMAGE`
+* **Valor:** `seu-usuario-docker/sua-imagem:v2.0`
 
 ---
 
-## 🏗️ Como Criar e Dockerizar uma Nova Imagem de Autograder
+### Contrato de Montagem de Volumes (Container)
 
-Caso deseje criar um novo motor de avaliação (ex: integrando compiladores Java ou outros modelos de IA), a nova imagem Docker deve seguir o **Contrato de Montagem de Volumes**:
-
-### Contrato de Diretórios (Volumes)
-
-O container é executado mapeando 3 diretórios obrigatórios:
+O contêiner do autograder é executado mapeando 3 diretórios obrigatórios:
 
 | Diretório no Container | Origem | Descrição |
 | --- | --- | --- |
-| `/app/submission` | Código do aluno | Contém a solução enviada pelo estudante (busca recursiva de `.java`). |
-| `/app/reference` | Gabarito do professor | Contém o arquivo `enunciado.md` e os arquivos `.java` oficiais. |
-| `/app/output` | Saída | Local onde a imagem DEVE salvar o relatório `results.json`. |
+| `/app/submission` | Código do aluno | Solução enviada pelo estudante (varredura recursiva de arquivos `.java`). |
+| `/app/reference` | Gabarito do professor | Contém o `enunciado.md` e os arquivos `.java` de referência da atividade. |
+| `/app/output` | Saída | Diretório onde o contêiner DEVE gerar os arquivos de resultado (`results.json` e `feedback.md`). |
 
-### Variáveis de Ambiente Injetadas
+---
 
-* `GEMINI_API_KEY`: Chave da API enviada de forma isolada ao container.
+### Contrato dos Arquivos de Saída (`output/`)
 
-### Formato Obrigatório do Arquivo `output/results.json`
+Ao finalizar a análise, a imagem Docker deve gerar no diretório `/app/output` os seguintes arquivos:
 
-O motor contido na imagem Docker deve gerar o arquivo `/app/output/results.json` na seguinte estrutura ao finalizar a execução:
+#### 1. `output/results.json`
+Arquivo JSON lido pelo workflow para publicação e registro de notas no contrato `classroom50/result/v1`:
 
 ```json
 {
   "avaliacao": "Certo",
-  "justificativa": "Explicação detalhada dos acertos e falhas encontradas no código.",
-  "dica_correcao": "Instrução pedagógica para ajudar o aluno a evoluir.",
-  "sugestao_correcao": "Exemplo de implementação em Java (opcional)."
+  "justificativa": "O aluno aplicou corretamente os conceitos de herança e encapsulamento exigidos.",
+  "dica_correcao": "Para melhorar ainda mais seu código, considere tornar os atributos de classe privados.",
+  "sugestao_correcao": "private String titulo;\nprivate double preco;"
 }
-
 ```
 
-### Exemplo de `Dockerfile` para Nova Imagem
+> **Valores aceitos na chave `avaliacao`:** `"Certo"`, `"Parcialmente Certo"` ou `"Errado"`.
 
-```dockerfile
-FROM python:3.11-slim
-
-WORKDIR /app
-
-# Instala dependências do sistema e do compilador
-RUN apt-get update && apt-get install -y default-jdk && rm -rf /var/lib/apt/lists/*
-
-COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
-
-COPY src/ ./src
-
-# Garante que os diretórios do contrato existam
-RUN mkdir -p /app/submission /app/reference /app/output
-
-ENTRYPOINT ["python", "/app/src/main.py"]
-
-```
-
-### Comandos para Compilar e Publicar a Nova Imagem
-
-```bash
-# 1. Build da nova imagem
-docker build -t seu-usuario-docker/classroom50-custom-autograder:v1.0 .
-
-# 2. Upload para o Registry (Docker Hub)
-docker push seu-usuario-docker/classroom50-custom-autograder:v1.0
-
-```
+#### 2. `output/feedback.md`
+Arquivo em formato Markdown contendo a mensagem a ser formatada e postada como comentário no Pull Request do estudante.
 
 ---
+
+### 🛡️ Resiliência e Tratamento de Erros (Fallback da API Gemini)
+
+O motor contido no contêiner possui mecanismo de resiliência com **tentativas de retry (backoff)** para contornar instabilidades transitórias da API do Gemini (status `503`, `429` ou *timeouts*):
+
+1. O script tenta realizar a chamada até **3 vezes** com intervalo progressivo entre as falhas.
+2. Caso a API permaneça indisponível ou a chave não esteja configurada, o motor ativa um **fallback de contingência**:
+   * Gera um `feedback.md` amigável no PR orientando o aluno a re-executar `gh student submit` em alguns minutos.
+   * Gera o `results.json` de fallback no schema oficial com `avaliacao`: `"Parcialmente Certo"` e pontuação zerada.
+   * Encerra a execução com código de saída `0` (`sys.exit(0)`), mantendo o Job no GitHub Actions em **Verde (Sucesso 🟢)** para evitar falsos alertas nos painéis dos monitores.
+
+---
+
+## 📤 Fluxo de Submissão do Aluno e Gatilho `submit/*`
+
+Para evitar a execução desnecessária da IA durante commits intermediários de desenvolvimento:
+
+1. **Restrição do Gatilho (`autograders/seguro.yaml`)**: O autograder é configurado para ser acionado apenas quando houver o envio de uma tag padronizada:
+   ```yaml
+   on:
+     push:
+       tags:
+         - 'submit/*'
+   ```
+
+2. **Comando de Submissão pelo Aluno**: O estudante envia a versão final executando no terminal o comando da CLI do Classroom 50:
+   ```bash
+   gh student submit
+   ```
+
+Este comando gera uma tag de versão (ex: `submit/2026-11-09T14-57-00`), disparando a avaliação isolada no contêiner central e postando o parecer pedagógico no Pull Request e nas Releases do repositório do aluno.
